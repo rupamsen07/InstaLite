@@ -1,4 +1,9 @@
 const usersService = require("../services/users.service");
+const {
+  parsePagination,
+  parseSort,
+  createMeta,
+} = require("../utils/pagination");
 
 function parseId(value) {
   if (!/^[1-9]\d*$/.test(value)) {
@@ -42,9 +47,55 @@ async function create(req, res, next) {
   }
 }
 
-async function list(_req, res, next) {
+async function list(req, res, next) {
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+
+  const sorting = parseSort(
+    req.query,
+    ["createdAt", "username", "fullname"],
+    "sortBy must be one of: createdAt, username, fullname",
+  );
+  if (sorting.error) {
+    return res.status(400).json({ error: sorting.error });
+  }
+
+  let isPrivate;
+  if (req.query.isPrivate !== undefined) {
+    if (req.query.isPrivate !== "true" && req.query.isPrivate !== "false") {
+      return res
+        .status(400)
+        .json({ error: "isPrivate must be true or false" });
+    }
+    isPrivate = req.query.isPrivate === "true";
+  }
+
+  const where = {};
+  if (isPrivate !== undefined) {
+    where.isPrivate = isPrivate;
+  }
+  if (req.query.search !== undefined) {
+    if (typeof req.query.search !== "string") {
+      return res.status(400).json({ error: "search must be a string" });
+    }
+    where.OR = [
+      { username: { contains: req.query.search, mode: "insensitive" } },
+      { fullname: { contains: req.query.search, mode: "insensitive" } },
+    ];
+  }
+
   try {
-    return res.status(200).json(await usersService.listUsers());
+    const result = await usersService.listUsers({
+      ...pagination,
+      ...sorting,
+      where,
+    });
+    return res.status(200).json({
+      data: result.data,
+      meta: createMeta(pagination.page, pagination.limit, result.total),
+    });
   } catch (error) {
     return next(error);
   }

@@ -4,8 +4,18 @@ function createUser(data) {
   return prisma.user.create({ data });
 }
 
-function listUsers() {
-  return prisma.user.findMany();
+function listUsers({ page, limit, skip, sortBy, order, where }) {
+  return prisma
+    .$transaction([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { [sortBy]: order },
+      }),
+      prisma.user.count({ where }),
+    ])
+    .then(([data, total]) => ({ data, total, page, limit }));
 }
 
 function getUserById(id) {

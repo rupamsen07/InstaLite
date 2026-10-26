@@ -4,8 +4,18 @@ function createPost(data) {
   return prisma.post.create({ data });
 }
 
-function listPosts() {
-  return prisma.post.findMany();
+function listPosts({ page, limit, skip, sortBy, order, where }) {
+  return prisma
+    .$transaction([
+      prisma.post.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { [sortBy]: order },
+      }),
+      prisma.post.count({ where }),
+    ])
+    .then(([data, total]) => ({ data, total, page, limit }));
 }
 
 function getPostById(id) {
