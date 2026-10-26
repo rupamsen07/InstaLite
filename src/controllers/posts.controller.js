@@ -15,19 +15,30 @@ function parseId(value) {
 }
 
 async function create(req, res, next) {
-  const { imageUrl, caption, location } = req.body || {};
-  if (typeof imageUrl !== "string" || !imageUrl) {
-    return res.status(400).json({ error: "imageUrl is required" });
+  const { imageUrl, authorId, caption, location } = req.body || {};
+  if (
+    typeof imageUrl !== "string" ||
+    !imageUrl ||
+    !Number.isSafeInteger(authorId) ||
+    authorId < 1
+  ) {
+    return res
+      .status(400)
+      .json({ error: "imageUrl and authorId are required" });
   }
 
   try {
     const post = await postsService.createPost({
       imageUrl,
+      authorId,
       ...(caption !== undefined ? { caption } : {}),
       ...(location !== undefined ? { location } : {}),
     });
     return res.status(201).json(post);
   } catch (error) {
+    if (error.code === "P2003") {
+      return res.status(404).json({ error: "User not found" });
+    }
     return next(error);
   }
 }
@@ -55,8 +66,8 @@ async function list(req, res, next) {
 
   const sorting = parseSort(
     req.query,
-    ["createdAt", "updatedAt"],
-    "sortBy must be one of: createdAt, updatedAt",
+    ["createdAt", "updatedAt", "likes"],
+    "sortBy must be one of: createdAt, updatedAt, likes",
   );
   if (sorting.error) {
     return res.status(400).json({ error: sorting.error });
@@ -129,6 +140,23 @@ async function getOne(req, res, next) {
   }
 }
 
+async function listLikes(req, res, next) {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    return res.status(404).json({ error: "Post not found" });
+  }
+
+  try {
+    const users = await postsService.listPostLikes(id);
+    if (users === null) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+    return res.status(200).json(users);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function update(req, res, next) {
   const id = parseId(req.params.id);
   if (id === null) {
@@ -170,4 +198,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { create, list, getOne, update, remove };
+module.exports = { create, list, getOne, listLikes, update, remove };

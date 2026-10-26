@@ -85,6 +85,12 @@ async function list(req, res, next) {
       { fullname: { contains: req.query.search, mode: "insensitive" } },
     ];
   }
+  if (req.query.hasPosts !== undefined) {
+    if (req.query.hasPosts !== "true" && req.query.hasPosts !== "false") {
+      return res.status(400).json({ error: "hasPosts must be true or false" });
+    }
+    where.posts = req.query.hasPosts === "true" ? { some: {} } : { none: {} };
+  }
 
   try {
     const result = await usersService.listUsers({
@@ -113,6 +119,56 @@ async function getOne(req, res, next) {
       return res.status(404).json({ error: "User not found" });
     }
     return res.status(200).json(user);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function listPosts(req, res, next) {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+
+  try {
+    const result = await usersService.listUserPosts(id, pagination);
+    if (result === null) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    return res.status(200).json({
+      data: result.data,
+      meta: createMeta(pagination.page, pagination.limit, result.total),
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function listLikedPosts(req, res, next) {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+
+  try {
+    const result = await usersService.listLikedPosts(id, pagination);
+    if (result === null) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    return res.status(200).json({
+      data: result.data,
+      meta: createMeta(pagination.page, pagination.limit, result.total),
+    });
   } catch (error) {
     return next(error);
   }
@@ -159,4 +215,12 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { create, list, getOne, update, remove };
+module.exports = {
+  create,
+  list,
+  getOne,
+  listPosts,
+  listLikedPosts,
+  update,
+  remove,
+};
